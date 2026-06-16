@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Peek</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; display: flex; align-items: center; justify-content: center; height: 100vh; }
+  #screen { max-width: 100vw; max-height: 100vh; object-fit: contain; display: none; }
+  #status { color: #aaa; font-family: monospace; font-size: 14px; }
+</style>
+</head>
+<body>
+<img id="screen" alt="remote screen">
+<div id="status">Connecting…</div>
+<script>
+const token = new URLSearchParams(location.search).get('token');
+const screen = document.getElementById('screen');
+const status = document.getElementById('status');
+
+if (!token) {
+  status.textContent = 'Invalid link — no token.';
+} else {
+  let prevUrl = null;
+  let retryDelay = 1000;
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${proto}//${location.host}/ws?token=${token}`);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      retryDelay = 1000;
+      status.style.display = 'none';
+      screen.style.display = 'block';
+    };
+
+    ws.onmessage = (e) => {
+      const url = URL.createObjectURL(new Blob([e.data], { type: 'image/jpeg' }));
+      screen.src = url;
+      if (prevUrl) URL.revokeObjectURL(prevUrl);
+      prevUrl = url;
+    };
+
+    ws.onclose = ws.onerror = () => {
+      screen.style.display = 'none';
+      status.style.display = 'block';
+      status.textContent = `Host offline — reconnecting in ${retryDelay / 1000}s…`;
+      setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 30000);
+    };
+  }
+
+  connect();
+}
+</script>
+</body>
+</html>
