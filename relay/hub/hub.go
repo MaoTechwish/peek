@@ -29,12 +29,14 @@ func (h *Hub) RegisterAgent(token string) {
 
 func (h *Hub) UnregisterAgent(token string) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
+	viewers := h.viewers[token]
 	delete(h.agents, token)
-	for _, v := range h.viewers[token] {
+	delete(h.viewers, token)
+	h.mu.Unlock()
+
+	for _, v := range viewers {
 		v.Close()
 	}
-	delete(h.viewers, token)
 }
 
 func (h *Hub) AgentOnline(token string) bool {
@@ -53,12 +55,13 @@ func (h *Hub) RemoveViewer(token string, s Sender) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	conns := h.viewers[token]
-	for i, c := range conns {
-		if c == s {
-			h.viewers[token] = append(conns[:i], conns[i+1:]...)
-			return
+	fresh := make([]Sender, 0, len(conns))
+	for _, c := range conns {
+		if c != s {
+			fresh = append(fresh, c)
 		}
 	}
+	h.viewers[token] = fresh
 }
 
 func (h *Hub) Broadcast(token string, frame []byte) {
@@ -68,6 +71,8 @@ func (h *Hub) Broadcast(token string, frame []byte) {
 	h.mu.RUnlock()
 
 	for _, c := range conns {
-		_ = c.WriteMessage(2, frame) // 2 = websocket.BinaryMessage
+		if err := c.WriteMessage(2, frame); err != nil { // 2 = websocket.BinaryMessage
+			h.RemoveViewer(token, c)
+		}
 	}
 }
