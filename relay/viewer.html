@@ -31,8 +31,6 @@ if (!token) {
 
     ws.onopen = () => {
       retryDelay = 1000;
-      status.style.display = 'none';
-      screen.style.display = 'block';
     };
 
     ws.onmessage = (e) => {
@@ -40,9 +38,14 @@ if (!token) {
       screen.src = url;
       if (prevUrl) URL.revokeObjectURL(prevUrl);
       prevUrl = url;
+      // Show screen on first frame, not on connect — avoids broken-image flash
+      screen.style.display = 'block';
+      status.style.display = 'none';
     };
 
-    ws.onclose = ws.onerror = () => {
+    // Only reconnect in onclose — onerror always fires before onclose, so
+    // handling both would schedule two parallel reconnect chains.
+    ws.onclose = () => {
       screen.style.display = 'none';
       status.style.display = 'block';
       status.textContent = `Host offline — reconnecting in ${retryDelay / 1000}s…`;

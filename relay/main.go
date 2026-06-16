@@ -14,8 +14,11 @@ import (
 //go:embed viewer.html
 var viewerHTML []byte
 
+const viewerIdleTimeout = 120 * time.Second
+
 var upgrader = websocket.Upgrader{
-	CheckOrigin:     func(r *http.Request) bool { return true },
+	// The viewer HTML is served from the relay itself, so the origin is always
+	// the relay's own host. Default gorilla behaviour (origin == host) is correct.
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024 * 256,
 }
@@ -102,6 +105,14 @@ func handleViewer(h *hub.Hub) http.HandlerFunc {
 			return
 		}
 		defer conn.Close()
+
+		// Read deadline guards against the TOCTOU race where the agent disconnects
+		// between AgentOnline and AddViewer, leaving this goroutine blocked forever.
+		conn.SetReadDeadline(time.Now().Add(viewerIdleTimeout))
+		conn.SetPongHandler(func(string) error {
+			conn.SetReadDeadline(time.Now().Add(viewerIdleTimeout))
+			return nil
+		})
 
 		h.AddViewer(token, conn)
 		defer h.RemoveViewer(token, conn)

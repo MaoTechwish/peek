@@ -72,6 +72,7 @@ func (h *Hub) Broadcast(token string, frame []byte) {
 
 	for _, c := range conns {
 		if err := c.WriteMessage(2, frame); err != nil { // 2 = websocket.BinaryMessage
+			c.Close()
 			h.RemoveViewer(token, c)
 		}
 	}
