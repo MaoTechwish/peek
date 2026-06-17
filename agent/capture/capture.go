@@ -5,8 +5,18 @@ import (
 	"hash/fnv"
 	"image"
 	"image/jpeg"
+	"math"
 
 	"github.com/kbinani/screenshot"
+	"golang.org/x/image/draw"
+)
+
+// Frames larger than this bounding box are downscaled before encoding. On
+// high-resolution displays this reduces JPEG encode cost and bandwidth; frames
+// within the box are encoded unchanged (no added work).
+const (
+	maxWidth  = 1920
+	maxHeight = 1080
 )
 
 type Capture struct {
@@ -32,11 +42,29 @@ func (c *Capture) processFrame(img image.Image, h uint64) []byte {
 	}
 	c.prevHash = h
 
+	img = downscale(img)
+
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 70}); err != nil {
 		return nil
 	}
 	return buf.Bytes()
+}
+
+// downscale returns img unchanged when it fits within maxWidth x maxHeight;
+// otherwise it returns a resized copy that fits the box, preserving aspect ratio.
+func downscale(img image.Image) image.Image {
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w <= maxWidth && h <= maxHeight {
+		return img
+	}
+	scale := math.Min(float64(maxWidth)/float64(w), float64(maxHeight)/float64(h))
+	nw := int(float64(w) * scale)
+	nh := int(float64(h) * scale)
+	dst := image.NewRGBA(image.Rect(0, 0, nw, nh))
+	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
+	return dst
 }
 
 func hashImage(img image.Image) uint64 {

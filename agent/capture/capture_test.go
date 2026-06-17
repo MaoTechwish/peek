@@ -52,6 +52,41 @@ func TestHashImage_slightChangeDetected(t *testing.T) {
 	}
 }
 
+func TestDownscale_largeImageResizedToFit(t *testing.T) {
+	src := solidImage(3840, 2160, color.RGBA{10, 20, 30, 255})
+	out := downscale(src)
+	b := out.Bounds()
+	if b.Dx() > maxWidth || b.Dy() > maxHeight {
+		t.Errorf("downscaled image %dx%d exceeds %dx%d box", b.Dx(), b.Dy(), maxWidth, maxHeight)
+	}
+	// 16:9 source fills the 1920x1080 box exactly.
+	if b.Dx() != 1920 || b.Dy() != 1080 {
+		t.Errorf("expected 1920x1080, got %dx%d", b.Dx(), b.Dy())
+	}
+}
+
+func TestDownscale_smallImageUntouched(t *testing.T) {
+	src := solidImage(1280, 720, color.RGBA{1, 2, 3, 255})
+	out := downscale(src)
+	if out.Bounds() != src.Bounds() {
+		t.Errorf("in-bounds image should be untouched, got %v", out.Bounds())
+	}
+}
+
+func TestDownscale_aspectRatioPreserved(t *testing.T) {
+	// Ultrawide 3440x1440 -> limited by width: scale 1920/3440 -> 1920x803
+	// (1440 * 1920/3440 = 803.72, truncated).
+	src := solidImage(3440, 1440, color.RGBA{9, 9, 9, 255})
+	out := downscale(src)
+	b := out.Bounds()
+	if b.Dx() != 1920 {
+		t.Errorf("expected width 1920, got %d", b.Dx())
+	}
+	if b.Dy() != 803 {
+		t.Errorf("expected height 803, got %d", b.Dy())
+	}
+}
+
 func TestCapture_nilOnUnchangedFrame(t *testing.T) {
 	c := &Capture{}
 	// Simulate two identical frames by hashing the same image twice
