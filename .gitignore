@@ -1,2 +1,4 @@
 requirements.md
 .env
+/dist/*
+!/dist/.gitkeep
