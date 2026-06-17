@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -73,7 +74,7 @@ func handleAgent(h *hub.Hub) http.HandlerFunc {
 			return nil
 		})
 
-		h.RegisterAgent(token)
+		h.RegisterAgent(token, conn)
 		defer h.UnregisterAgent(token)
 
 		for {
@@ -118,10 +119,23 @@ func handleViewer(h *hub.Hub) http.HandlerFunc {
 		defer h.RemoveViewer(token, conn)
 
 		for {
-			_, _, err := conn.ReadMessage()
+			msgType, data, err := conn.ReadMessage()
 			if err != nil {
 				return
 			}
+			if msgType == websocket.TextMessage && isShutdownCommand(data) {
+				h.ShutdownAgent(token)
+			}
 		}
 	}
+}
+
+func isShutdownCommand(data []byte) bool {
+	var msg struct {
+		Cmd string `json:"cmd"`
+	}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return false
+	}
+	return msg.Cmd == "shutdown"
 }

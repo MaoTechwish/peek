@@ -49,6 +49,24 @@ func TestViewerEndpointRejectsNoToken(t *testing.T) {
 	}
 }
 
+func TestIsShutdownCommand(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{`{"cmd":"shutdown"}`, true},
+		{`{"cmd":"other"}`, false},
+		{`{"foo":"bar"}`, false},
+		{`not json`, false},
+		{``, false},
+	}
+	for _, c := range cases {
+		if got := isShutdownCommand([]byte(c.in)); got != c.want {
+			t.Errorf("isShutdownCommand(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 func TestViewerEndpointRejectsOfflineAgent(t *testing.T) {
 	mux := buildMux(newHub())
 	rec := httptest.NewRecorder()
