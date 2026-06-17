@@ -1,0 +1,11 @@
+{
+	# Email used by Let's Encrypt for expiry notices.
+	email {$ACME_EMAIL}
+}
+
+# Caddy provisions and renews a real TLS cert for this domain automatically.
+# reverse_proxy transparently handles the WebSocket upgrade for /agent and /ws,
+# and preserves the Host header so the relay's gorilla origin check still passes.
+{$RELAY_DOMAIN} {
+	reverse_proxy relay:8080
+}

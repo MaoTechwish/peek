@@ -1,0 +1,28 @@
+services:
+  relay:
+    build: ./relay
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+    expose:
+      - "8080"          # internal only; not published to the host
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"         # required for Let's Encrypt HTTP-01 challenge + redirect
+      - "443:443"       # https / wss
+    environment:
+      - RELAY_DOMAIN=${RELAY_DOMAIN}
+      - ACME_EMAIL=${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # persists issued certs across restarts
+      - caddy_config:/config
+    depends_on:
+      - relay
+
+volumes:
+  caddy_data:
+  caddy_config:
