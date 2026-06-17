@@ -38,7 +38,7 @@ func TestAgentOnline(t *testing.T) {
 	if h.AgentOnline("tok1") {
 		t.Fatal("agent should not be online before registration")
 	}
-	h.RegisterAgent("tok1")
+	h.RegisterAgent("tok1", &mockSender{})
 	if !h.AgentOnline("tok1") {
 		t.Fatal("agent should be online after registration")
 	}
@@ -50,7 +50,7 @@ func TestAgentOnline(t *testing.T) {
 
 func TestBroadcast_deliversToAllViewers(t *testing.T) {
 	h := New()
-	h.RegisterAgent("tok1")
+	h.RegisterAgent("tok1", &mockSender{})
 	v1, v2 := &mockSender{}, &mockSender{}
 	h.AddViewer("tok1", v1)
 	h.AddViewer("tok1", v2)
@@ -73,7 +73,7 @@ func TestBroadcast_unknownTokenNoPanic(t *testing.T) {
 
 func TestRemoveViewer(t *testing.T) {
 	h := New()
-	h.RegisterAgent("tok1")
+	h.RegisterAgent("tok1", &mockSender{})
 	v1, v2 := &mockSender{}, &mockSender{}
 	h.AddViewer("tok1", v1)
 	h.AddViewer("tok1", v2)
@@ -91,7 +91,7 @@ func TestRemoveViewer(t *testing.T) {
 
 func TestUnregisterAgent_closesViewers(t *testing.T) {
 	h := New()
-	h.RegisterAgent("tok1")
+	h.RegisterAgent("tok1", &mockSender{})
 	v1 := &mockSender{}
 	h.AddViewer("tok1", v1)
 
@@ -99,5 +99,43 @@ func TestUnregisterAgent_closesViewers(t *testing.T) {
 
 	if !v1.closed {
 		t.Error("viewer connection should be closed when agent unregisters")
+	}
+}
+
+func TestShutdownAgent_sendsCommandToAgent(t *testing.T) {
+	h := New()
+	a := &mockSender{}
+	h.RegisterAgent("tok1", a)
+
+	h.ShutdownAgent("tok1")
+
+	msgs := a.received()
+	if len(msgs) != 1 || string(msgs[0]) != `{"cmd":"shutdown"}` {
+		t.Errorf("agent should receive one shutdown command, got %v", msgs)
+	}
+}
+
+func TestShutdownAgent_unknownTokenNoPanic(t *testing.T) {
+	h := New()
+	h.ShutdownAgent("nobody") // must not panic
+}
+
+func TestShutdownAgent_concurrent(t *testing.T) {
+	h := New()
+	a := &mockSender{}
+	h.RegisterAgent("tok1", a)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h.ShutdownAgent("tok1")
+		}()
+	}
+	wg.Wait()
+
+	if len(a.received()) != 10 {
+		t.Errorf("expected 10 shutdown sends, got %d", len(a.received()))
 	}
 }
