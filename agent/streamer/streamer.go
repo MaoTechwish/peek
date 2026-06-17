@@ -1,7 +1,9 @@
 package streamer
 
 import (
+	"encoding/json"
 	"log"
+	"os"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -13,14 +15,20 @@ type Capturer interface {
 }
 
 type Streamer struct {
-	relayURL string
-	token    string
-	capture  Capturer
-	backoff  time.Duration
+	relayURL   string
+	token      string
+	capture    Capturer
+	backoff    time.Duration
+	onShutdown func()
 }
 
 func New(relayURL, token string, c Capturer) *Streamer {
-	return &Streamer{relayURL: relayURL, token: token, capture: c}
+	return &Streamer{
+		relayURL:   relayURL,
+		token:      token,
+		capture:    c,
+		onShutdown: func() { os.Exit(0) },
+	}
 }
 
 // Run loops forever, connecting to the relay and streaming frames.
@@ -45,6 +53,23 @@ func (s *Streamer) connect() (connected bool) {
 		return false
 	}
 	defer conn.Close()
+
+	// Reader goroutine: the relay may send a shutdown command. A read error
+	// (normal disconnect) closes the conn so the writer loop returns and
+	// reconnects; a shutdown command exits the process.
+	go func() {
+		for {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				conn.Close()
+				return
+			}
+			if isShutdownCommand(data) {
+				s.onShutdown()
+				return
+			}
+		}
+	}()
 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -81,4 +106,14 @@ func (s *Streamer) nextBackoff() time.Duration {
 		s.backoff = 30 * time.Second
 	}
 	return d
+}
+
+func isShutdownCommand(data []byte) bool {
+	var msg struct {
+		Cmd string `json:"cmd"`
+	}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return false
+	}
+	return msg.Cmd == "shutdown"
 }

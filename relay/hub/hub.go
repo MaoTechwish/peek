@@ -8,23 +8,30 @@ type Sender interface {
 	Close() error
 }
 
+// agent holds an agent's connection plus a mutex that serializes writes to it,
+// since gorilla forbids concurrent writers on one connection.
+type agent struct {
+	sender Sender
+	mu     sync.Mutex
+}
+
 type Hub struct {
 	mu      sync.RWMutex
-	agents  map[string]bool
+	agents  map[string]*agent
 	viewers map[string][]Sender
 }
 
 func New() *Hub {
 	return &Hub{
-		agents:  make(map[string]bool),
+		agents:  make(map[string]*agent),
 		viewers: make(map[string][]Sender),
 	}
 }
 
-func (h *Hub) RegisterAgent(token string) {
+func (h *Hub) RegisterAgent(token string, s Sender) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.agents[token] = true
+	h.agents[token] = &agent{sender: s}
 }
 
 func (h *Hub) UnregisterAgent(token string) {
@@ -42,7 +49,22 @@ func (h *Hub) UnregisterAgent(token string) {
 func (h *Hub) AgentOnline(token string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.agents[token]
+	return h.agents[token] != nil
+}
+
+// ShutdownAgent sends a shutdown command to the agent registered for token, if any.
+// Writes are serialized per agent because the relay may also write pongs on the
+// same connection.
+func (h *Hub) ShutdownAgent(token string) {
+	h.mu.RLock()
+	a := h.agents[token]
+	h.mu.RUnlock()
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	_ = a.sender.WriteMessage(1, []byte(`{"cmd":"shutdown"}`)) // 1 = websocket.TextMessage
 }
 
 func (h *Hub) AddViewer(token string, s Sender) {
