@@ -19,6 +19,23 @@ func (m *mockCapturer) Frame() ([]byte, error) {
 	return nil, nil
 }
 
+func TestIsShutdownCommand(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{`{"cmd":"shutdown"}`, true},
+		{`{"cmd":"other"}`, false},
+		{`garbage`, false},
+		{``, false},
+	}
+	for _, c := range cases {
+		if got := isShutdownCommand([]byte(c.in)); got != c.want {
+			t.Errorf("isShutdownCommand(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 func TestBackoff_resetsAfterSuccessfulConnect(t *testing.T) {
 	s := &Streamer{}
 	s.resetBackoff()
