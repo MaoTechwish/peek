@@ -22,9 +22,7 @@ func main() {
 	}
 
 	if !isElevated() {
-		fmt.Fprintln(os.Stderr, "error: peek requires administrator privileges")
-		fmt.Fprintln(os.Stderr, "  Windows: right-click → Run as administrator")
-		fmt.Fprintln(os.Stderr, "  macOS:   sudo ./main")
+		reportElevationRequired()
 		os.Exit(1)
 	}
 
