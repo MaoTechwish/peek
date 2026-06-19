@@ -1,0 +1,41 @@
+name: Build macOS Agent
+
+on:
+  push:
+    branches: [ci/macos-agent-build]
+  workflow_dispatch:
+    inputs:
+      relay_url:
+        description: "Relay URL baked into the binary (main.relayURL)"
+        required: false
+        default: "wss://peek.maos.dev"
+
+jobs:
+  build-amd64:
+    # Intel (macos-13) hosted runners are retired, and the remaining Intel
+    # labels (macos-15-large / macos-15-intel) are paid "large" runners. So we
+    # use a free Apple Silicon runner and cross-compile to darwin/amd64: macOS's
+    # clang/SDK are universal, so cgo targets x86_64 from an arm64 host.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+
+      - name: Build agent (darwin/amd64)
+        working-directory: agent
+        env:
+          GOOS: darwin
+          GOARCH: amd64
+          CGO_ENABLED: "1"
+        run: |
+          go build -ldflags "-X main.relayURL=${{ inputs.relay_url || 'wss://peek.maos.dev' }} -s -w" -o ../dist/main-amd64 .
+          file ../dist/main-amd64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: peek-agent-darwin-amd64
+          path: dist/main-amd64
+          if-no-files-found: error
