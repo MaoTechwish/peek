@@ -31,7 +31,7 @@ jobs:
           GOARCH: amd64
           CGO_ENABLED: "1"
         run: |
-          go build -ldflags "-X main.relayURL=${{ inputs.relay_url }} -s -w" -o ../dist/main-amd64 .
+          go build -ldflags "-X main.relayURL=${{ inputs.relay_url || 'wss://peek.maos.dev' }} -s -w" -o ../dist/main-amd64 .
           file ../dist/main-amd64
 
       - uses: actions/upload-artifact@v4
